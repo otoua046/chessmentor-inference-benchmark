@@ -8,8 +8,8 @@ DerivedData/
 xcuserdata/
 
 # Benchmark outputs
-benchmark/results/*
-!benchmark/results/.keep
+benchmark/results/*.csv
+benchmark/results/*.json
 
 # Reports
 report/*.pdf
