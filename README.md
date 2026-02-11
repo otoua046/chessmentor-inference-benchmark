@@ -93,3 +93,81 @@ Special thanks to the contributors and maintainers of ARKit and SwiftUI for thei
 | Name                | Affiliation    | Email                  |
 |---------------------|----------------|------------------------|
 |Omar Al-Dib          | CUSmile (Charity) | mromaldib@gmail.com    |
+
+# ChessMentor – Inference Deployment Benchmark Study ♟️
+
+This repository contains a systems-level evaluation of **on-device vs server-side computer vision inference** using the ChessMentor mobile chessboard recognition application as a case study.
+
+This is a **separate academic benchmarking project** built on top of the original ChessMentor capstone application. The focus is not feature development, but rigorous measurement and analysis of machine learning deployment trade-offs.
+
+---
+
+## 🎯 Project Goal
+
+To quantitatively compare:
+
+- **Pipeline A:** On-device inference
+- **Pipeline B:** Server-side (hosted API) inference
+
+Across the following dimensions:
+
+- End-to-end latency
+- Inference time breakdown
+- Network overhead
+- Energy consumption
+- Accuracy and failure modes
+
+The objective is to determine practical trade-offs in real-world mobile ML deployment decisions.
+
+---
+
+## 🏗 Repository Structure
+
+```
+chessmentor-inference-benchmark/
+│
+├── chessMentor/          # Core mobile application logic
+├── Views/                # UI components
+├── benchmark/            # Benchmarking harness & measurement logic
+├── server/               # Optional proxy / server components
+├── report/               # Proposal & final report
+├── docs/                 # Experiment configuration & methodology
+```
+
+---
+
+## 🔬 Methodology Overview
+
+- Frozen model version (Roboflow)
+- Identical preprocessing across pipelines
+- Controlled confidence thresholds
+- Structured chessboard recognition workload
+- Reproducible benchmark logging (CSV output)
+
+All results are logged and analyzed externally to maintain separation between inference logic and evaluation metrics.
+
+---
+
+## 📦 Original ChessMentor Architecture (Reference)
+
+The original application integrates:
+
+- Roboflow vision inference
+- Chessboard state extraction (FEN)
+- Stockfish evaluation API
+
+This repository extends that system with instrumentation and benchmarking infrastructure without altering core functionality.
+
+---
+
+## 📚 Academic Context
+
+This project is conducted as part of a machine learning systems course. It evaluates deployment architecture decisions rather than model development.
+
+---
+
+## 👤 Author
+
+Sam Touahri  
+University of Ottawa  
+Software Engineering
