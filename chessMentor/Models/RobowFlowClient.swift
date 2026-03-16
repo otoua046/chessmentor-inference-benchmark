@@ -34,9 +34,9 @@ class RoboflowClient {
     private let confidence: Double
     private let overlap: Double
 
-    /// Example modelId: "chessbot-v2/1"
+    /// Example modelId: "chessmentor/8"
     init(apiKey: String,
-         modelId: String = "chessbot-v2/1",
+         modelId: String = "chessmentor/8",
          confidence: Double = 0.25,   // permissive like the Python SDK
          overlap: Double = 0.20,      // low NMS so adjacent pieces survive
          session: URLSession = .shared)

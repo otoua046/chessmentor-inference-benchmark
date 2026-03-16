@@ -413,7 +413,7 @@ final class RoboflowClientTests: XCTestCase {
         let modelIDs = [
             "model/1",
             "model/2",
-            "chessbot-v2/1",
+            "chessmentor/8",
             "custom-model-name/3",
             "model-with-many-dashes/10"
         ]

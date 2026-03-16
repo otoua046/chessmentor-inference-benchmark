@@ -40,7 +40,7 @@ struct BoardDetectorAdapter: BoardDetector {
     /// overlap, and sizing configuration values for consistent detection performance. :contentReference[oaicite:8]{index=8}
     init(
         roboflowApiKey: String,
-        pieceModelId: String = "chessbot-v2/1",
+        pieceModelId: String = "chessmentor/8",
         boardModelId: String = "chessboard-detection-x5kxd/1"
     ) {
 
@@ -149,4 +149,3 @@ private extension UIImage {
         self.init(cgImage: cg)
     }
 }
-
