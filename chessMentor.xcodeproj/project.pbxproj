@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4B70DA0B2F68759500C21DDE /* Roboflow in Frameworks */ = {isa = PBXBuildFile; productRef = 4B70DA0A2F68759500C21DDE /* Roboflow */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A82E7E0F2D57A1FA00DBE5A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -89,6 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4B70DA0B2F68759500C21DDE /* Roboflow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +158,7 @@
 			);
 			name = chessMentor;
 			packageProductDependencies = (
+				4B70DA0A2F68759500C21DDE /* Roboflow */,
 			);
 			productName = chessMentor;
 			productReference = A82E7EA32D5BDC7300DBE5A2 /* chessMentor.app */;
@@ -236,6 +242,9 @@
 			);
 			mainGroup = A82E7DF52D57A1F700DBE5A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A82E7DF52D57A1F700DBE5A2;
 			projectDirPath = "";
@@ -443,7 +452,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"chessMentor/Preview Content\"";
-				DEVELOPMENT_TEAM = 6BP95QHN5B;
+				DEVELOPMENT_TEAM = WFH2TCAAQ8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chessMentor/Info.plist;
@@ -460,7 +469,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.obay2002.ChessMentor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.samtouahri.chessmentor.benchmark;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -476,7 +485,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"chessMentor/Preview Content\"";
-				DEVELOPMENT_TEAM = 6BP95QHN5B;
+				DEVELOPMENT_TEAM = WFH2TCAAQ8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chessMentor/Info.plist;
@@ -493,7 +502,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.obay2002.ChessMentor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.samtouahri.chessmentor.benchmark;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -617,6 +626,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/roboflow/swift-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4B70DA0A2F68759500C21DDE /* Roboflow */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = Roboflow;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A82E7DF62D57A1F700DBE5A2 /* Project object */;
 }
