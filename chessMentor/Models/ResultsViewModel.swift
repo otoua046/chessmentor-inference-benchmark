@@ -32,7 +32,7 @@ final class ResultsViewModel: ObservableObject {
 
     /// Tune confidence/overlap here if you want (0.25–0.35 is a good start for confidence)
     init(roboflowApiKey: String,
-         modelId: String = "chessbot-v2/1",
+         modelId: String = "chessmentor/8",
          confidence: Double = 0.30,
          overlap: Double = 0.50) {
         self.roboflow = RoboflowClient(apiKey: roboflowApiKey,
