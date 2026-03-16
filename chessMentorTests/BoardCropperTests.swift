@@ -73,7 +73,7 @@ final class BoardCropperTests: XCTestCase {
         RFStubProtocol.responseBody = predictionJSON(x: 400, y: 400, w: 600, h: 600, conf: 0.95)
 
         let cropper = BoardCropper(apiKey: "TEST",
-                                   boardModelId: "chessboard-detection-x5kxd/1",
+                                   boardModelId: hostedBoardCropperModelId,
                                    confidence: 0.25,
                                    overlap: 0.20,
                                    maxLongSide: 1280,
@@ -92,7 +92,7 @@ final class BoardCropperTests: XCTestCase {
         RFStubProtocol.responseBody = predictionJSON(x: 400, y: 400, w: 300, h: 600, conf: 0.92)
 
         let cropper = BoardCropper(apiKey: "TEST",
-                                   boardModelId: "chessboard-detection-x5kxd/1",
+                                   boardModelId: hostedBoardCropperModelId,
                                    confidence: 0.25,
                                    overlap: 0.20,
                                    padFrac: 0.00,        // make the math simpler

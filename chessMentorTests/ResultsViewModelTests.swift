@@ -11,7 +11,7 @@ class MockCropper: BoardCropper {
         self.image = image
         super.init(
             apiKey: "TEST",
-            boardModelId: "chessboard-detection-x5kxd/1",
+            boardModelId: hostedBoardCropperModelId,
             confidence: 0.25,
             overlap: 0.20,
             maxLongSide: 1280,

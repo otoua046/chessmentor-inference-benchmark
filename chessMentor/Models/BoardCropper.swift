@@ -5,6 +5,8 @@ import OSLog
 private let cropLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "chessmentor",
                              category: "BoardCropperRF")
 
+let hostedBoardCropperModelId = "chessboard-detection-x5kxd-nfp7i/1"
+
 /// Crops the board using a Roboflow board-detection model (no Vision, no warp).
 class BoardCropper {
 
@@ -29,7 +31,7 @@ class BoardCropper {
     private let enforceSquare: Bool
 
     init(apiKey: String,
-         boardModelId: String = "chessboard-detection-x5kxd/1",
+         boardModelId: String = hostedBoardCropperModelId,
          confidence: Double = 0.25,
          overlap: Double = 0.20,
          maxLongSide: CGFloat = 1280,
