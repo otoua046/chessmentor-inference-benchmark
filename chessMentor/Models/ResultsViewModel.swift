@@ -23,7 +23,7 @@ final class ResultsViewModel: ObservableObject {
 
     // Services
     private let cropper: BoardCropper
-    private let roboflow: RoboflowClient
+    private let pieceDetector: any PieceDetectionServing
     private let fenBuilder = FenBuilder()
     private let engine: StockfishService        // ← no default here
     private let drawer: ArrowDrawer 
@@ -32,13 +32,17 @@ final class ResultsViewModel: ObservableObject {
 
     /// Tune confidence/overlap here if you want (0.25–0.35 is a good start for confidence)
     init(roboflowApiKey: String,
-         modelId: String = "chessbot-v2/1",
+         modelName: String = "chessmentor",
+         modelVersion: Int = 8,
          confidence: Double = 0.30,
          overlap: Double = 0.50) {
-        self.roboflow = RoboflowClient(apiKey: roboflowApiKey,
-                                       modelId: modelId,
-                                       confidence: confidence,
-                                       overlap: overlap)
+        self.pieceDetector = RoboflowOnDevicePieceInferenceService(
+            apiKey: roboflowApiKey,
+            modelName: modelName,
+            modelVersion: modelVersion,
+            confidence: confidence,
+            overlap: overlap
+        )
         // 👇 new: board detector cropper (tweak thresholds if you like)
         self.cropper = BoardCropper(apiKey: roboflowApiKey,
                                     boardModelId: "chessboard-detection-x5kxd/1",
@@ -54,13 +58,13 @@ final class ResultsViewModel: ObservableObject {
     #if DEBUG
     /// Testing initializer (DI for mocks)
     init(cropper: BoardCropper,
-         roboflow: RoboflowClient,
+         pieceDetector: any PieceDetectionServing,
          engine: StockfishService,
          drawer: ArrowDrawer,
          saveDebugImages: Bool = false) {
 
         self.cropper = cropper
-        self.roboflow = roboflow
+        self.pieceDetector = pieceDetector
         self.engine  = engine
         self.drawer  = drawer
         self.saveDebugImages = saveDebugImages
@@ -81,7 +85,7 @@ final class ResultsViewModel: ObservableObject {
 
                 // 2) Detect
                 phase = .detecting
-                let raw = try await roboflow.detect(on: cropped)
+                let raw = try await pieceDetector.detect(on: cropped)
                 vmLog.info("Raw detections: \(raw.count, privacy: .public)")
 
                 // 🔎 NEW: filter out off-board / tiny / huge / low-conf boxes

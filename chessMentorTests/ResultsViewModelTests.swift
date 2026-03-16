@@ -22,13 +22,12 @@ class MockCropper: BoardCropper {
     override func crop(_ image: UIImage) throws -> UIImage { self.image }
 }
 
-class MockRoboflow: RoboflowClient {
+struct MockPieceDetector: PieceDetectionServing {
     let predictions: [Prediction]
-    init(predictions: [Prediction]) {
-        self.predictions = predictions
-        super.init(apiKey: "TEST")
+
+    func detect(on image: UIImage) async throws -> [Prediction] {
+        predictions
     }
-    override func detect(on image: UIImage) async throws -> [Prediction] { predictions }
 }
 
 class MockEngine: StockfishService {
@@ -100,7 +99,8 @@ final class ResultsViewModelTests: XCTestCase {
     func testInitializeWithCustomModelID() {
         let viewModel = ResultsViewModel(
             roboflowApiKey: "test_key",
-            modelId: "custom-model/1"
+            modelName: "custom-model",
+            modelVersion: 1
         )
         
         if case .idle = viewModel.phase {
@@ -218,7 +218,7 @@ final class ResultsViewModelTests: XCTestCase {
         
         let vm = ResultsViewModel(
             cropper: MockCropper(image: board),
-            roboflow: MockRoboflow(predictions: preds),
+            pieceDetector: MockPieceDetector(predictions: preds),
             engine: MockEngine(move: BestMove(best_move_uci: "e2e4", best_move_san: "e4", evaluation: "0.31")),
             drawer: ArrowDrawer(),
             saveDebugImages: false
@@ -258,7 +258,7 @@ final class ResultsViewModelTests: XCTestCase {
         
         let vm = ResultsViewModel(
             cropper: MockCropper(image: board),
-            roboflow: MockRoboflow(predictions: preds),
+            pieceDetector: MockPieceDetector(predictions: preds),
             engine: MockEngine(move: BestMove(best_move_uci: "a2a3", best_move_san: "a3", evaluation: "0.0")),
             drawer: ArrowDrawer(),
             saveDebugImages: false
