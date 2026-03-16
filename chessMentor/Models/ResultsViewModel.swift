@@ -45,7 +45,7 @@ final class ResultsViewModel: ObservableObject {
         )
         // 👇 new: board detector cropper (tweak thresholds if you like)
         self.cropper = BoardCropper(apiKey: roboflowApiKey,
-                                    boardModelId: "chessboard-detection-x5kxd/1",
+                                    boardModelId: hostedBoardCropperModelId,
                                     confidence: 0.25,
                                     overlap: 0.20,
                                     maxLongSide: 1280,

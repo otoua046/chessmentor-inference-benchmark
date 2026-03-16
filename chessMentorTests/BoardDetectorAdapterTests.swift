@@ -640,7 +640,7 @@ final class BoardDetectorAdapterTests: XCTestCase {
 
     func testBoardDetectorAdapterWithVariousModelIdFormats() {
         let modelIds = [
-            ("chessbot-v2/1", "chessboard-detection-x5kxd/1"),
+            ("chessbot-v2/1", hostedBoardCropperModelId),
             ("model/1", "board/1"),
             ("custom-model-name/10", "custom-board/5"),
             ("a/1", "b/1")

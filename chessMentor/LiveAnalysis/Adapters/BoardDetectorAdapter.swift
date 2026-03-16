@@ -41,7 +41,7 @@ struct BoardDetectorAdapter: BoardDetector {
     init(
         roboflowApiKey: String,
         pieceModelId: String = "chessmentor/8",
-        boardModelId: String = "chessboard-detection-x5kxd/1"
+        boardModelId: String = hostedBoardCropperModelId
     ) {
 
         let pieceModel = Self.parsePieceModelID(pieceModelId)
