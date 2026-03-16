@@ -23,8 +23,8 @@ struct BoardDetectorAdapter: BoardDetector {
     /// Crops the original image to an isolated chessboard region based on ML detection. :contentReference[oaicite:3]{index=3}
     private let cropper: BoardCropper
 
-    /// Roboflow client used for piece-level object detection on an image. :contentReference[oaicite:4]{index=4}
-    private let roboflow: RoboflowClient
+    /// On-device Roboflow service used for piece-level object detection on the cropped board image.
+    private let pieceDetector: any PieceDetectionServing
 
     /// Builds FEN strings from filtered piece predictions. :contentReference[oaicite:5]{index=5}
     private let fenBuilder = FenBuilder()
@@ -40,14 +40,17 @@ struct BoardDetectorAdapter: BoardDetector {
     /// overlap, and sizing configuration values for consistent detection performance. :contentReference[oaicite:8]{index=8}
     init(
         roboflowApiKey: String,
-        pieceModelId: String = "chessbot-v2/1",
+        pieceModelId: String = "chessmentor/8",
         boardModelId: String = "chessboard-detection-x5kxd/1"
     ) {
 
-        // ML model for detecting individual chess pieces within a cropped board image
-        self.roboflow = RoboflowClient(
+        let pieceModel = Self.parsePieceModelID(pieceModelId)
+
+        // Pipeline A: live piece detection now runs on-device via the Roboflow iOS SDK.
+        self.pieceDetector = RoboflowOnDevicePieceInferenceService(
             apiKey: roboflowApiKey,
-            modelId: pieceModelId,
+            modelName: pieceModel.name,
+            modelVersion: pieceModel.version,
             confidence: 0.30,
             overlap: 0.50
         )
@@ -120,7 +123,12 @@ struct BoardDetectorAdapter: BoardDetector {
 
         // Launch asynchronous detection task, then block until completion. :contentReference[oaicite:16]{index=16}
         Task {
-            do { out = .success(try await roboflow.detect(on: image)) }
+            do {
+                Self.log.info("Live piece detection → on-device Roboflow model")
+                let predictions = try await pieceDetector.detect(on: image)
+                Self.log.info("Live on-device piece detection OK. predictions=\(predictions.count, privacy: .public)")
+                out = .success(predictions)
+            }
             catch { out = .failure(error) }
             sem.signal()
         }
@@ -133,6 +141,14 @@ struct BoardDetectorAdapter: BoardDetector {
         case .success(let p): return p
         case .failure(let e): throw e
         }
+    }
+
+    private static func parsePieceModelID(_ modelID: String) -> (name: String, version: Int) {
+        let parts = modelID.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let version = Int(parts[1]) else {
+            return ("chessmentor", 8)
+        }
+        return (parts[0], version)
     }
 }
 
@@ -149,4 +165,3 @@ private extension UIImage {
         self.init(cgImage: cg)
     }
 }
-
