@@ -23,7 +23,7 @@ class BoardCropper {
     }
 
     // MARK: config
-    private let rf: RoboflowClient
+    private let detector: any BoardDetectionServing
     private let boardModelId: String
     private let outputSize = CGSize(width: 800, height: 800)
     private let maxLongSide: CGFloat
@@ -36,16 +36,29 @@ class BoardCropper {
          overlap: Double = 0.20,
          maxLongSide: CGFloat = 1280,
          padFrac: CGFloat = 0.05,
-         enforceSquare: Bool = true)
+         enforceSquare: Bool = true,
+         inferenceBackend: BoardCropperInferenceBackend = .hosted)
     {
         self.boardModelId = boardModelId
         self.maxLongSide = maxLongSide
         self.padFrac = padFrac
         self.enforceSquare = enforceSquare
-        self.rf = RoboflowClient(apiKey: apiKey,
-                                 modelId: boardModelId,
-                                 confidence: confidence,
-                                 overlap: overlap)
+        switch inferenceBackend {
+        case .hosted:
+            self.detector = HostedBoardCropInferenceService(
+                apiKey: apiKey,
+                modelId: boardModelId,
+                confidence: confidence,
+                overlap: overlap
+            )
+        case .onDevice:
+            self.detector = RoboflowOnDeviceBoardCropInferenceService(
+                apiKey: apiKey,
+                boardModelId: boardModelId,
+                confidence: confidence,
+                overlap: overlap
+            )
+        }
     }
 
     /// Original behavior (used by the photo flow)
@@ -118,7 +131,7 @@ class BoardCropper {
         let sem = DispatchSemaphore(value: 0)
         Task {
             do {
-                let preds = try await rf.detect(on: image)
+                let preds = try await detector.detect(on: image)
                 out = .success(preds)
             } catch {
                 out = .failure(error)
