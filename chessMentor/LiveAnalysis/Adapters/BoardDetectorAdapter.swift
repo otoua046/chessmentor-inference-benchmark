@@ -63,7 +63,8 @@ struct BoardDetectorAdapter: BoardDetector {
             overlap: 0.20,
             maxLongSide: 1280,
             padFrac: 0.03,
-            enforceSquare: true
+            enforceSquare: true,
+            inferenceBackend: .onDevice
         )
 
         // Heuristic post-processing to clean noisy ML detections

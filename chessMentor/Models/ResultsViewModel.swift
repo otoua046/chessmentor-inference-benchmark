@@ -50,7 +50,8 @@ final class ResultsViewModel: ObservableObject {
                                     overlap: 0.20,
                                     maxLongSide: 1280,
                                     padFrac: 0.03,
-                                    enforceSquare: true)
+                                    enforceSquare: true,
+                                    inferenceBackend: .onDevice)
         self.engine = StockfishService()        // ← assign here
         self.drawer = ArrowDrawer()             // ← assign here
         self.saveDebugImages = true             // ← assign here

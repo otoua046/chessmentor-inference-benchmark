@@ -4,23 +4,24 @@ import UIKit
 
 final class RoboflowOnDevicePieceInferenceTests: XCTestCase {
 
-    private func staticBoardImageURL() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("chessMentor")
-            .appendingPathComponent("ui_test_board.jpg")
-    }
-
     private func loadStaticBoardImage() throws -> UIImage {
-        let url = staticBoardImageURL()
-        let data = try Data(contentsOf: url)
-        guard let image = UIImage(data: data) else {
-            XCTFail("Failed to decode test image at \(url.path)")
+        let bundle = Bundle(for: Self.self)
+        guard let url = bundle.url(forResource: "ui_test_board", withExtension: "jpg") else {
+            XCTFail("Missing bundled test resource: ui_test_board.jpg in chessMentorTests bundle.")
             throw NSError(
                 domain: "RoboflowOnDevicePieceInferenceTests",
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to decode static test image."]
+                userInfo: [NSLocalizedDescriptionKey: "Missing bundled test resource: ui_test_board.jpg."]
+            )
+        }
+
+        let data = try Data(contentsOf: url)
+        guard let image = UIImage(data: data) else {
+            XCTFail("Failed to decode bundled test image at \(url.path)")
+            throw NSError(
+                domain: "RoboflowOnDevicePieceInferenceTests",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to decode bundled test image."]
             )
         }
         return image
