@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4B70DA0B2F68759500C21DDE /* Roboflow in Frameworks */ = {isa = PBXBuildFile; productRef = 4B70DA0A2F68759500C21DDE /* Roboflow */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A82E7E0F2D57A1FA00DBE5A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -41,6 +45,7 @@
 			membershipExceptions = (
 				LiveAnalysisView.swift,
 				LoginView.swift,
+				PhotoBenchmarkView.swift,
 				ResultsView.swift,
 				ScanningView.swift,
 			);
@@ -89,6 +94,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4B70DA0B2F68759500C21DDE /* Roboflow in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +159,7 @@
 			);
 			name = chessMentor;
 			packageProductDependencies = (
+				4B70DA0A2F68759500C21DDE /* Roboflow */,
 			);
 			productName = chessMentor;
 			productReference = A82E7EA32D5BDC7300DBE5A2 /* chessMentor.app */;
@@ -236,6 +243,9 @@
 			);
 			mainGroup = A82E7DF52D57A1F700DBE5A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A82E7DF52D57A1F700DBE5A2;
 			projectDirPath = "";
@@ -447,6 +457,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chessMentor/Info.plist;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need to access your camera to scan the chessboard";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We save the cropped chessboard image so you can verify detections.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -480,6 +491,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = chessMentor/Info.plist;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need to access your camera to scan the chessboard";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "We save the cropped chessboard image so you can verify detections.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -617,6 +629,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/roboflow/swift-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4B70DA0A2F68759500C21DDE /* Roboflow */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4B70DA092F68759500C21DDE /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = Roboflow;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A82E7DF62D57A1F700DBE5A2 /* Project object */;
 }

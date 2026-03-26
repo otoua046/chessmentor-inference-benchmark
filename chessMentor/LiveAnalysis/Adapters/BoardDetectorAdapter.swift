@@ -23,8 +23,8 @@ struct BoardDetectorAdapter: BoardDetector {
     /// Crops the original image to an isolated chessboard region based on ML detection. :contentReference[oaicite:3]{index=3}
     private let cropper: BoardCropper
 
-    /// Roboflow client used for piece-level object detection on an image. :contentReference[oaicite:4]{index=4}
-    private let roboflow: RoboflowClient
+    /// Piece detector used for object detection on the cropped board image.
+    private let pieceDetector: any PieceDetectionServing
 
     /// Builds FEN strings from filtered piece predictions. :contentReference[oaicite:5]{index=5}
     private let fenBuilder = FenBuilder()
@@ -35,35 +35,36 @@ struct BoardDetectorAdapter: BoardDetector {
     /// Applies heuristics to remove low-confidence or invalid piece detections. :contentReference[oaicite:7]{index=7}
     private let filter: PieceFilter
 
-    /// Initializes Roboflow clients for both piece detection and board cropping.
-    /// Uses provided API key and model identifiers, and applies predefined confidence,
-    /// overlap, and sizing configuration values for consistent detection performance. :contentReference[oaicite:8]{index=8}
+    init(
+        cropper: BoardCropper,
+        pieceDetector: any PieceDetectionServing,
+        filter: PieceFilter = PieceFilter(
+            minConfidence: 0.30,
+            minConfidenceKing: 0.22,
+            edgeTrimSquares: 0.12,
+            minSizeFrac: 0.35,
+            maxSizeFrac: 1.60
+        )
+    ) {
+        self.cropper = cropper
+        self.pieceDetector = pieceDetector
+        self.filter = filter
+    }
+
     init(
         roboflowApiKey: String,
-        pieceModelId: String = "chessbot-v2/1",
-        boardModelId: String = "chessboard-detection-x5kxd/1"
+        pieceModelId: String = InferenceFactory.defaultPieceModelId,
+        boardModelId: String = InferenceFactory.defaultBoardModelId,
+        pipelineMode: PipelineMode = .hosted
     ) {
-
-        // ML model for detecting individual chess pieces within a cropped board image
-        self.roboflow = RoboflowClient(
-            apiKey: roboflowApiKey,
-            modelId: pieceModelId,
-            confidence: 0.30,
-            overlap: 0.50
+        let factory = InferenceFactory(
+            mode: pipelineMode,
+            roboflowApiKey: roboflowApiKey,
+            pieceModelId: pieceModelId,
+            boardModelId: boardModelId
         )
-
-        // ML model for identifying the chessboard region to crop from source image
-        self.cropper = BoardCropper(
-            apiKey: roboflowApiKey,
-            boardModelId: boardModelId,
-            confidence: 0.25,
-            overlap: 0.20,
-            maxLongSide: 1280,
-            padFrac: 0.03,
-            enforceSquare: true
-        )
-
-        // Heuristic post-processing to clean noisy ML detections
+        self.cropper = factory.makeBoardCropper()
+        self.pieceDetector = factory.makePieceDetector()
         self.filter = PieceFilter(
             minConfidence: 0.30,
             minConfidenceKing: 0.22,
@@ -120,7 +121,12 @@ struct BoardDetectorAdapter: BoardDetector {
 
         // Launch asynchronous detection task, then block until completion. :contentReference[oaicite:16]{index=16}
         Task {
-            do { out = .success(try await roboflow.detect(on: image)) }
+            do {
+                Self.log.info("Live piece detection start")
+                let predictions = try await pieceDetector.detect(on: image)
+                Self.log.info("Live piece detection OK. predictions=\(predictions.count, privacy: .public)")
+                out = .success(predictions)
+            }
             catch { out = .failure(error) }
             sem.signal()
         }
@@ -134,6 +140,7 @@ struct BoardDetectorAdapter: BoardDetector {
         case .failure(let e): throw e
         }
     }
+
 }
 
 // MARK: - CVPixelBuffer Conversion
@@ -149,4 +156,3 @@ private extension UIImage {
         self.init(cgImage: cg)
     }
 }
-

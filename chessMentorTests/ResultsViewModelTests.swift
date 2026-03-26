@@ -10,10 +10,13 @@ class MockCropper: BoardCropper {
     init(image: UIImage) {
         self.image = image
         super.init(
-            apiKey: "TEST",
-            boardModelId: "chessboard-detection-x5kxd/1",
-            confidence: 0.25,
-            overlap: 0.20,
+            detector: RoboflowClient(
+                apiKey: "TEST",
+                modelId: hostedBoardCropperModelId,
+                confidence: 0.25,
+                overlap: 0.20
+            ),
+            boardModelId: hostedBoardCropperModelId,
             maxLongSide: 1280,
             padFrac: 0.03,
             enforceSquare: true
@@ -22,13 +25,12 @@ class MockCropper: BoardCropper {
     override func crop(_ image: UIImage) throws -> UIImage { self.image }
 }
 
-class MockRoboflow: RoboflowClient {
+struct MockPieceDetector: PieceDetectionServing {
     let predictions: [Prediction]
-    init(predictions: [Prediction]) {
-        self.predictions = predictions
-        super.init(apiKey: "TEST")
+
+    func detect(on image: UIImage) async throws -> [Prediction] {
+        predictions
     }
-    override func detect(on image: UIImage) async throws -> [Prediction] { predictions }
 }
 
 class MockEngine: StockfishService {
@@ -38,6 +40,62 @@ class MockEngine: StockfishService {
         super.init(session: .shared)
     }
     override func bestMove(for fen: String) async throws -> BestMove { move }
+}
+
+final class ThrowingCropper: BoardCropper {
+    let cropError: Error
+
+    init(error: Error) {
+        self.cropError = error
+        super.init(
+            detector: RoboflowClient(
+                apiKey: "TEST",
+                modelId: hostedBoardCropperModelId,
+                confidence: 0.25,
+                overlap: 0.20
+            ),
+            boardModelId: hostedBoardCropperModelId,
+            maxLongSide: 1280,
+            padFrac: 0.03,
+            enforceSquare: true
+        )
+    }
+
+    override func crop(_ image: UIImage) throws -> UIImage {
+        throw cropError
+    }
+}
+
+struct ThrowingPieceDetector: PieceDetectionServing {
+    let detectionError: Error
+
+    func detect(on image: UIImage) async throws -> [Prediction] {
+        throw detectionError
+    }
+}
+
+final class ThrowingEngine: StockfishService {
+    let engineError: Error
+
+    init(error: Error) {
+        self.engineError = error
+        super.init(session: .shared)
+    }
+
+    override func bestMove(for fen: String) async throws -> BestMove {
+        throw engineError
+    }
+}
+
+enum TestFailure: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .message(let message):
+            return message
+        }
+    }
 }
 
 // MARK: - Helpers
@@ -60,6 +118,36 @@ private func center(_ file: Character, _ rank: Int) -> (CGFloat, CGFloat) {
 private func piece(_ file: Character, _ rank: Int, _ cls: String, conf: CGFloat = 0.95) -> Prediction {
     let (x, y) = center(file, rank)
     return Prediction(x: x, y: y, width: 88, height: 88, class: cls, confidence: conf)
+}
+
+private func benchmarkLogger(
+    outputURL: URL,
+    pipelineMode: PipelineMode = .hosted,
+    sessionID: String = "test-session"
+) -> BenchmarkLogger {
+    let backend = pipelineMode == .hosted ? "hosted_roboflow_api" : "local_roboflow_mobile"
+    let config = BenchmarkConfig(
+        pipelineMode: pipelineMode,
+        boardBackend: backend,
+        pieceBackend: backend,
+        enabledOverride: true,
+        outputURL: outputURL,
+        sessionID: sessionID
+    )
+    return BenchmarkLogger(config: config)
+}
+
+private func temporaryBenchmarkURL(fileName: String = "benchmark_runs.csv") -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathComponent(fileName)
+}
+
+private func benchmarkCSVLines(at url: URL) throws -> [String] {
+    let contents = try String(contentsOf: url, encoding: .utf8)
+    return contents
+        .split(whereSeparator: \.isNewline)
+        .map(String.init)
 }
 
 // MARK: - ResultsViewModel Tests
@@ -100,7 +188,7 @@ final class ResultsViewModelTests: XCTestCase {
     func testInitializeWithCustomModelID() {
         let viewModel = ResultsViewModel(
             roboflowApiKey: "test_key",
-            modelId: "custom-model/1"
+            pieceModelId: "custom-model/1"
         )
         
         if case .idle = viewModel.phase {
@@ -218,7 +306,7 @@ final class ResultsViewModelTests: XCTestCase {
         
         let vm = ResultsViewModel(
             cropper: MockCropper(image: board),
-            roboflow: MockRoboflow(predictions: preds),
+            pieceDetector: MockPieceDetector(predictions: preds),
             engine: MockEngine(move: BestMove(best_move_uci: "e2e4", best_move_san: "e4", evaluation: "0.31")),
             drawer: ArrowDrawer(),
             saveDebugImages: false
@@ -258,7 +346,7 @@ final class ResultsViewModelTests: XCTestCase {
         
         let vm = ResultsViewModel(
             cropper: MockCropper(image: board),
-            roboflow: MockRoboflow(predictions: preds),
+            pieceDetector: MockPieceDetector(predictions: preds),
             engine: MockEngine(move: BestMove(best_move_uci: "a2a3", best_move_san: "a3", evaluation: "0.0")),
             drawer: ArrowDrawer(),
             saveDebugImages: false
@@ -279,6 +367,220 @@ final class ResultsViewModelTests: XCTestCase {
         
         vm.run(with: UIImage())
         wait(for: [exp], timeout: 3.0)
+    }
+
+    @MainActor
+    func testBenchmarkLoggingWritesOneSuccessRowForValidPhotoRun() throws {
+        let outputURL = temporaryBenchmarkURL()
+        let board = blankImage()
+        let preds: [Prediction] = [
+            piece("e", 1, "w-king", conf: 0.40),
+            piece("e", 8, "b-king", conf: 0.40),
+            piece("e", 2, "w-pawn"),
+            piece("d", 7, "b-pawn"),
+        ]
+
+        let vm = ResultsViewModel(
+            cropper: MockCropper(image: board),
+            pieceDetector: MockPieceDetector(predictions: preds),
+            engine: MockEngine(move: BestMove(best_move_uci: "e2e4", best_move_san: "e4", evaluation: "0.31")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let exp = expectation(description: "benchmark success row")
+
+        vm.$phase
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { phase in
+                if case .done = phase {
+                    exp.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.run(with: UIImage())
+        wait(for: [exp], timeout: 3.0)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains(",test-session,"))
+        XCTAssertTrue(lines[1].contains(",photo,"))
+        XCTAssertTrue(lines[1].contains(",4,true,true,"))
+    }
+
+    @MainActor
+    func testBenchmarkLoggingWritesFailureRowForCropError() throws {
+        let outputURL = temporaryBenchmarkURL()
+        let vm = ResultsViewModel(
+            cropper: ThrowingCropper(error: TestFailure.message("crop failed")),
+            pieceDetector: MockPieceDetector(predictions: []),
+            engine: MockEngine(move: BestMove(best_move_uci: "e2e4", best_move_san: "e4", evaluation: "0.31")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let exp = expectation(description: "crop failure row")
+
+        vm.$phase
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { phase in
+                if case .failed = phase {
+                    exp.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.run(with: UIImage())
+        wait(for: [exp], timeout: 3.0)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains(",false,board_crop_failed: crop failed"))
+    }
+
+    @MainActor
+    func testBenchmarkLoggingWritesFailureRowForPieceDetectionError() throws {
+        let outputURL = temporaryBenchmarkURL()
+        let vm = ResultsViewModel(
+            cropper: MockCropper(image: blankImage()),
+            pieceDetector: ThrowingPieceDetector(detectionError: TestFailure.message("piece failed")),
+            engine: MockEngine(move: BestMove(best_move_uci: "e2e4", best_move_san: "e4", evaluation: "0.31")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let exp = expectation(description: "piece failure row")
+
+        vm.$phase
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { phase in
+                if case .failed = phase {
+                    exp.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.run(with: UIImage())
+        wait(for: [exp], timeout: 3.0)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains("piece_detection_failed: piece failed"))
+    }
+
+    @MainActor
+    func testBenchmarkLoggingWritesFailureRowForInvalidFenWithFilteredDetectionCount() throws {
+        let outputURL = temporaryBenchmarkURL()
+        let preds = [piece("e", 1, "w-king")]
+        let vm = ResultsViewModel(
+            cropper: MockCropper(image: blankImage()),
+            pieceDetector: MockPieceDetector(predictions: preds),
+            engine: MockEngine(move: BestMove(best_move_uci: "a2a3", best_move_san: "a3", evaluation: "0.0")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let exp = expectation(description: "invalid fen row")
+
+        vm.$phase
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { phase in
+                if case .failed = phase {
+                    exp.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.run(with: UIImage())
+        wait(for: [exp], timeout: 3.0)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains(",1,false,false,invalid_fen:"))
+    }
+
+    @MainActor
+    func testRunBenchmarkUsesProvidedInputIDAndSkipsEngine() async throws {
+        let outputURL = temporaryBenchmarkURL()
+        let board = blankImage()
+        let preds: [Prediction] = [
+            piece("e", 1, "w-king", conf: 0.40),
+            piece("e", 8, "b-king", conf: 0.40),
+            piece("e", 2, "w-pawn"),
+            piece("d", 7, "b-pawn"),
+        ]
+        let vm = ResultsViewModel(
+            cropper: MockCropper(image: board),
+            pieceDetector: MockPieceDetector(predictions: preds),
+            engine: ThrowingEngine(error: TestFailure.message("engine should not run")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let result = await vm.runBenchmark(
+            with: UIImage(),
+            inputID: "ui_test_board:measured:001"
+        )
+
+        XCTAssertEqual(result.inputID, "ui_test_board:measured:001")
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.detectionCount, 4)
+        XCTAssertEqual(result.fenValid, true)
+        XCTAssertNil(result.errorMessage)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains(",ui_test_board:measured:001,"))
+        XCTAssertTrue(lines[1].contains(",4,true,true,"))
+    }
+
+    @MainActor
+    func testBenchmarkLoggingDoesNotWriteSecondRowWhenEngineFailsAfterValidFen() throws {
+        let outputURL = temporaryBenchmarkURL()
+        let preds: [Prediction] = [
+            piece("e", 1, "w-king", conf: 0.40),
+            piece("e", 8, "b-king", conf: 0.40),
+            piece("e", 2, "w-pawn"),
+            piece("d", 7, "b-pawn"),
+        ]
+        let vm = ResultsViewModel(
+            cropper: MockCropper(image: blankImage()),
+            pieceDetector: MockPieceDetector(predictions: preds),
+            engine: ThrowingEngine(error: TestFailure.message("engine failed")),
+            drawer: ArrowDrawer(),
+            saveDebugImages: false,
+            benchmarkLogger: benchmarkLogger(outputURL: outputURL)
+        )
+
+        let exp = expectation(description: "engine failure after benchmark success")
+
+        vm.$phase
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { phase in
+                if case .failed = phase {
+                    exp.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        vm.run(with: UIImage())
+        wait(for: [exp], timeout: 3.0)
+
+        let lines = try benchmarkCSVLines(at: outputURL)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines[1].contains(",4,true,true,"))
+        XCTAssertFalse(lines[1].contains("engine failed"))
     }
 }
 
@@ -413,7 +715,7 @@ final class RoboflowClientTests: XCTestCase {
         let modelIDs = [
             "model/1",
             "model/2",
-            "chessbot-v2/1",
+            "chessmentor/8",
             "custom-model-name/3",
             "model-with-many-dashes/10"
         ]

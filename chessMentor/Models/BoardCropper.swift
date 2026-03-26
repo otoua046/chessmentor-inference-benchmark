@@ -5,10 +5,12 @@ import OSLog
 private let cropLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "chessmentor",
                              category: "BoardCropperRF")
 
+let hostedBoardCropperModelId = "chessboard-detection-x5kxd-nfp7i/1"
+
 /// Crops the board using a Roboflow board-detection model (no Vision, no warp).
 class BoardCropper {
 
-    enum CropError: LocalizedError {
+    enum CropError: LocalizedError, Equatable {
         case badImage
         case noDetection
 
@@ -21,29 +23,24 @@ class BoardCropper {
     }
 
     // MARK: config
-    private let rf: RoboflowClient
+    private let detector: any BoardDetectionServing
     private let boardModelId: String
     private let outputSize = CGSize(width: 800, height: 800)
     private let maxLongSide: CGFloat
     private let padFrac: CGFloat
     private let enforceSquare: Bool
 
-    init(apiKey: String,
-         boardModelId: String = "chessboard-detection-x5kxd/1",
-         confidence: Double = 0.25,
-         overlap: Double = 0.20,
+    init(detector: any BoardDetectionServing,
+         boardModelId: String = hostedBoardCropperModelId,
          maxLongSide: CGFloat = 1280,
          padFrac: CGFloat = 0.05,
          enforceSquare: Bool = true)
     {
+        self.detector = detector
         self.boardModelId = boardModelId
         self.maxLongSide = maxLongSide
         self.padFrac = padFrac
         self.enforceSquare = enforceSquare
-        self.rf = RoboflowClient(apiKey: apiKey,
-                                 modelId: boardModelId,
-                                 confidence: confidence,
-                                 overlap: overlap)
     }
 
     /// Original behavior (used by the photo flow)
@@ -116,7 +113,7 @@ class BoardCropper {
         let sem = DispatchSemaphore(value: 0)
         Task {
             do {
-                let preds = try await rf.detect(on: image)
+                let preds = try await detector.detect(on: image)
                 out = .success(preds)
             } catch {
                 out = .failure(error)

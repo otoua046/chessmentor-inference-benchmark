@@ -1,10 +1,12 @@
 import SwiftUI
 import AVFoundation
 import PhotosUI
+
 struct ScanningView: View {
+    let inferenceFactory: InferenceFactory
     
     //Camera
-    @StateObject private var camera = CameraModel()
+    @StateObject private var camera: CameraModel
 
     // holds the picked item from the photo library
         @State private var pickedItem: PhotosPickerItem? = nil
@@ -16,6 +18,11 @@ struct ScanningView: View {
     let primaryColor = Color(red: 255/255, green: 200/255, blue: 124/255)
     let accentColor = Color(red: 193/255, green: 129/255, blue: 40/255)
     let backgroundColor = Color(red: 46/255, green: 33/255, blue: 27/255)
+
+    init(inferenceFactory: InferenceFactory) {
+        self.inferenceFactory = inferenceFactory
+        _camera = StateObject(wrappedValue: CameraModel())
+    }
     
     var body: some View {
         ZStack {
@@ -134,7 +141,7 @@ struct ScanningView: View {
                     }
                 }
         .navigationDestination(isPresented: $camera.isTaken) {
-                    ResultsView(camera: camera)
+                    ResultsView(camera: camera, inferenceFactory: inferenceFactory)
                         .onDisappear {
                             // If you already added this earlier, keep it—it fixes the "Back" issue:
                             camera.retakePicture()
@@ -145,6 +152,6 @@ struct ScanningView: View {
 
 struct ScanningView_Previews: PreviewProvider {
     static var previews: some View {
-        ScanningView()
+        ScanningView(inferenceFactory: InferenceFactory(mode: .hosted, roboflowApiKey: "PREVIEW"))
     }
 }

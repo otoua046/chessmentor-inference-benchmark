@@ -5,6 +5,10 @@ import SwiftUI
 /// or driven by UI tests. :contentReference[oaicite:1]{index=1}
 @main
 struct ChessMentorApp: App {
+    @AppStorage("benchmark.pipeline_mode")
+    private var storedPipelineMode = PipelineMode.hosted.rawValue
+
+    private let roboflowApiKey = "SxJbV6TVzYIVMe0brpAk"
 
     /// Determines whether the app is currently running under a UI test scenario.
     /// Uses command-line arguments and environment variables to detect UITEST_MODE.
@@ -12,6 +16,35 @@ struct ChessMentorApp: App {
     private var isUITestMode: Bool {
         let p = ProcessInfo.processInfo
         return p.arguments.contains("UITEST_MODE") || p.environment["UITEST_MODE"] == "1"
+    }
+
+    private var showsBenchmarkControls: Bool {
+        let p = ProcessInfo.processInfo
+        return p.arguments.contains("SHOW_BENCHMARK_CONTROLS")
+            || p.environment["SHOW_BENCHMARK_CONTROLS"] == "1"
+    }
+
+    private var launchOverridePipelineMode: PipelineMode? {
+        PipelineMode(overrideValue: ProcessInfo.processInfo.environment["PIPELINE_MODE"])
+    }
+
+    private var selectedPipelineMode: PipelineMode {
+        launchOverridePipelineMode ?? PipelineMode(configurationValue: storedPipelineMode)
+    }
+
+    private var selectedPipelineModeBinding: Binding<PipelineMode> {
+        Binding {
+            PipelineMode(configurationValue: storedPipelineMode)
+        } set: { newValue in
+            storedPipelineMode = newValue.rawValue
+        }
+    }
+
+    private var inferenceFactory: InferenceFactory {
+        InferenceFactory(
+            mode: selectedPipelineMode,
+            roboflowApiKey: roboflowApiKey
+        )
     }
 
     /// Defines the main scene of the app. Displays either:
@@ -25,11 +58,17 @@ struct ChessMentorApp: App {
                     // In UI testing, immediately show a results screen with a known image
                     // so automated tests can run deterministically without interacting
                     // with hardware camera access. :contentReference[oaicite:4]{index=4}
-                    ResultsView(camera: makeUITestCamera())
+                    ResultsView(camera: makeUITestCamera(), inferenceFactory: inferenceFactory)
                         .accessibilityIdentifier("results_root")
                 } else {
                     // Default runtime: start at the login screen. :contentReference[oaicite:5]{index=5}
-                    LoginView()
+                    LoginView(
+                        inferenceFactory: inferenceFactory,
+                        selectedPipelineMode: selectedPipelineModeBinding,
+                        effectivePipelineMode: selectedPipelineMode,
+                        launchOverridePipelineMode: launchOverridePipelineMode,
+                        showsBenchmarkControls: showsBenchmarkControls
+                    )
                 }
             }
         }
@@ -67,4 +106,3 @@ private extension UIImage {
         }
     }
 }
-

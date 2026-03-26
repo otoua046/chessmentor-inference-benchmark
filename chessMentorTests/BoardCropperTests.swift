@@ -39,6 +39,28 @@ private func blankImage(_ size: CGSize) -> UIImage {
     }
 }
 
+private func makeCropper(
+    boardModelId: String = hostedBoardCropperModelId,
+    confidence: Double = 0.25,
+    overlap: Double = 0.20,
+    maxLongSide: CGFloat = 1280,
+    padFrac: CGFloat = 0.05,
+    enforceSquare: Bool = true
+) -> BoardCropper {
+    BoardCropper(
+        detector: RoboflowClient(
+            apiKey: "TEST",
+            modelId: boardModelId,
+            confidence: confidence,
+            overlap: overlap
+        ),
+        boardModelId: boardModelId,
+        maxLongSide: maxLongSide,
+        padFrac: padFrac,
+        enforceSquare: enforceSquare
+    )
+}
+
 /// Convenience for a single prediction JSON
 private func predictionJSON(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat,
                             conf: CGFloat = 0.9,
@@ -72,13 +94,7 @@ final class BoardCropperTests: XCTestCase {
         let src = blankImage(CGSize(width: 800, height: 800))
         RFStubProtocol.responseBody = predictionJSON(x: 400, y: 400, w: 600, h: 600, conf: 0.95)
 
-        let cropper = BoardCropper(apiKey: "TEST",
-                                   boardModelId: "chessboard-detection-x5kxd/1",
-                                   confidence: 0.25,
-                                   overlap: 0.20,
-                                   maxLongSide: 1280,
-                                   padFrac: 0.05,
-                                   enforceSquare: true)
+        let cropper = makeCropper()
 
         let out = try cropper.crop(src)
         XCTAssertEqual(Int(out.size.width), 800)
@@ -91,12 +107,10 @@ final class BoardCropperTests: XCTestCase {
         // Tall rectangle
         RFStubProtocol.responseBody = predictionJSON(x: 400, y: 400, w: 300, h: 600, conf: 0.92)
 
-        let cropper = BoardCropper(apiKey: "TEST",
-                                   boardModelId: "chessboard-detection-x5kxd/1",
-                                   confidence: 0.25,
-                                   overlap: 0.20,
-                                   padFrac: 0.00,        // make the math simpler
-                                   enforceSquare: true)
+        let cropper = makeCropper(
+            padFrac: 0.00,        // make the math simpler
+            enforceSquare: true
+        )
 
         let out = try cropper.crop(src)
         XCTAssertEqual(Int(out.size.width), 800)
@@ -109,9 +123,10 @@ final class BoardCropperTests: XCTestCase {
         // Box close to top-left; with padding it would run out of bounds → clamp should handle it.
         RFStubProtocol.responseBody = predictionJSON(x: 60, y: 60, w: 120, h: 120, conf: 0.90)
 
-        let cropper = BoardCropper(apiKey: "TEST",
-                                   padFrac: 0.10,       // force padding beyond bounds
-                                   enforceSquare: true)
+        let cropper = makeCropper(
+            padFrac: 0.10,       // force padding beyond bounds
+            enforceSquare: true
+        )
 
         let out = try cropper.crop(src)
         XCTAssertEqual(Int(out.size.width), 800)
@@ -124,7 +139,7 @@ final class BoardCropperTests: XCTestCase {
         let src = blankImage(CGSize(width: 800, height: 800))
         RFStubProtocol.responseBody = #"{"predictions":[],"image":{"width":800,"height":800}}"#
 
-        let cropper = BoardCropper(apiKey: "TEST")
+        let cropper = makeCropper()
 
         do {
             _ = try cropper.crop(src)
@@ -144,7 +159,7 @@ final class BoardCropperTests: XCTestCase {
         RFStubProtocol.responseBody = predictionJSON(x: 400, y: 400, w: 600, h: 600,
                                                      conf: 0.95, imgW: 800, imgH: 800)
 
-        let cropper = BoardCropper(apiKey: "TEST") // uses defaults: maxLongSide 1280, enforceSquare true
+        let cropper = makeCropper() // uses defaults: maxLongSide 1280, enforceSquare true
 
         let out = try cropper.crop(src)
         XCTAssertEqual(Int(out.size.width), 800)
@@ -166,8 +181,7 @@ final class BoardCropperTests: XCTestCase {
         )
 
         // Disable the two expansions that prevented the error before.
-        let cropper = BoardCropper(
-            apiKey: "TEST",
+        let cropper = makeCropper(
             padFrac: 0.0,
             enforceSquare: false
         )

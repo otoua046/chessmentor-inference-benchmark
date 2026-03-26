@@ -23,135 +23,284 @@ final class ResultsViewModel: ObservableObject {
 
     // Services
     private let cropper: BoardCropper
-    private let roboflow: RoboflowClient
+    private let pieceDetector: any PieceDetectionServing
     private let fenBuilder = FenBuilder()
     private let engine: StockfishService        // ← no default here
     private let drawer: ArrowDrawer 
     private let saveDebugImages: Bool           // ← no default here
+    private let benchmarkLogger: BenchmarkLogger?
 
-
-    /// Tune confidence/overlap here if you want (0.25–0.35 is a good start for confidence)
-    init(roboflowApiKey: String,
-         modelId: String = "chessbot-v2/1",
-         confidence: Double = 0.30,
-         overlap: Double = 0.50) {
-        self.roboflow = RoboflowClient(apiKey: roboflowApiKey,
-                                       modelId: modelId,
-                                       confidence: confidence,
-                                       overlap: overlap)
-        // 👇 new: board detector cropper (tweak thresholds if you like)
-        self.cropper = BoardCropper(apiKey: roboflowApiKey,
-                                    boardModelId: "chessboard-detection-x5kxd/1",
-                                    confidence: 0.25,
-                                    overlap: 0.20,
-                                    maxLongSide: 1280,
-                                    padFrac: 0.03,
-                                    enforceSquare: true)
-        self.engine = StockfishService()        // ← assign here
-        self.drawer = ArrowDrawer()             // ← assign here
-        self.saveDebugImages = true             // ← assign here
-    }
-    #if DEBUG
-    /// Testing initializer (DI for mocks)
     init(cropper: BoardCropper,
-         roboflow: RoboflowClient,
-         engine: StockfishService,
-         drawer: ArrowDrawer,
-         saveDebugImages: Bool = false) {
+         pieceDetector: any PieceDetectionServing,
+         engine: StockfishService = StockfishService(),
+         drawer: ArrowDrawer = ArrowDrawer(),
+         saveDebugImages: Bool = true,
+         benchmarkLogger: BenchmarkLogger? = nil) {
 
         self.cropper = cropper
-        self.roboflow = roboflow
+        self.pieceDetector = pieceDetector
         self.engine  = engine
         self.drawer  = drawer
         self.saveDebugImages = saveDebugImages
+        self.benchmarkLogger = benchmarkLogger
     }
-    #endif
+
+    convenience init(
+        roboflowApiKey: String,
+        pipelineMode: PipelineMode = .hosted,
+        pieceModelId: String = InferenceFactory.defaultPieceModelId,
+        boardModelId: String = InferenceFactory.defaultBoardModelId,
+        confidence: Double = InferenceFactory.defaultPieceConfidence,
+        overlap: Double = InferenceFactory.defaultPieceOverlap
+    ) {
+        let factory = InferenceFactory(
+            mode: pipelineMode,
+            roboflowApiKey: roboflowApiKey,
+            pieceModelId: pieceModelId,
+            boardModelId: boardModelId,
+            pieceConfidence: confidence,
+            pieceOverlap: overlap
+        )
+        self.init(
+            cropper: factory.makeBoardCropper(),
+            pieceDetector: factory.makePieceDetector(),
+            benchmarkLogger: factory.makeBenchmarkLogger()
+        )
+    }
+
+    struct BenchmarkRunResult {
+        let inputID: String
+        let success: Bool
+        let detectionCount: Int?
+        let fenValid: Bool?
+        let errorMessage: String?
+    }
+
+    private struct PhotoPipelineSuccess {
+        let cropped: UIImage
+        let predictions: [Prediction]
+        let fen: String
+    }
+
+    private struct PhotoPipelineFailure {
+        let benchmarkResult: BenchmarkRunResult
+        let userMessage: String
+    }
+
+    private enum PhotoPipelineOutcome {
+        case success(PhotoPipelineSuccess)
+        case failure(PhotoPipelineFailure)
+    }
 
 
     func run(with image: UIImage) {
         Task {
-            do {
-                vmLog.info("Analysis start")
+            vmLog.info("Analysis start")
 
-                // 1) Crop
-                phase = .cropping
-                let cropped = try cropper.crop(image)
-                PhotoSaver.saveToLibrary(cropped) // save exact payload we send to Roboflow
-                vmLog.info("Saved cropped board to Photos.")
+            switch await runPhotoPipeline(
+                with: image,
+                inputID: "photo-\(UUID().uuidString)",
+                updatesPhase: true
+            ) {
+            case .success(let success):
+                do {
+                    phase = .queryingEngine
+                    let best = try await engine.bestMove(for: success.fen)
+                    vmLog.info("Engine OK: UCI \(best.best_move_uci, privacy: .public) / SAN \(best.best_move_san, privacy: .public)")
 
-                // 2) Detect
-                phase = .detecting
-                let raw = try await roboflow.detect(on: cropped)
-                vmLog.info("Raw detections: \(raw.count, privacy: .public)")
+                    phase = .drawingArrow
+                    let final = drawer.draw(on: success.cropped, uci: best.best_move_uci)
 
-                // 🔎 NEW: filter out off-board / tiny / huge / low-conf boxes
-                let filter = PieceFilter(
-                    minConfidence: 0.30,
-                    minConfidenceKing: 0.22,
-                    edgeTrimSquares: 0.12,    // tighten to 0.20 if side UI still leaks in
-                    minSizeFrac: 0.35,
-                    maxSizeFrac: 1.60
-                )
-                let preds = filter.apply(raw, imageSize: cropped.size)
-                vmLog.info("Filtered detections: \(preds.count, privacy: .public)")
-
-                // (optional) save both previews to Photos to compare
-                if let rawPreview = drawDetectionPreview(on: cropped, predictions: raw) {
-                    PhotoSaver.saveToLibrary(rawPreview)   // "raw"
+                    let overlays = drawDetections(on: success.cropped, predictions: success.predictions)
+                    phase = .done(.init(cropped: success.cropped,
+                                        overlays: overlays,
+                                        fen: success.fen,
+                                        bestMove: best,
+                                        finalImage: final))
+                    vmLog.info("Analysis done")
+                } catch {
+                    let msg = localizedMessage(for: error)
+                    vmLog.error("Analysis failed: \(msg, privacy: .public)")
+                    phase = .failed(msg)
                 }
-                if let filteredPreview = drawDetectionPreview(on: cropped, predictions: preds) {
-                    PhotoSaver.saveToLibrary(filteredPreview) // "filtered"
-                }
-
-                // class breakdown (of FILTERED)
-                let grouped = Dictionary(grouping: preds, by: { $0.class })
-                    .map { "\($0.key): \($0.value.count)" }
-                    .sorted()
-                vmLog.info("Class breakdown (filtered) → \(grouped.joined(separator: ", "), privacy: .public)")
-
-
-                // 3) FEN
-                phase = .generatingFEN
-                let fen = fenBuilder.fen(from: preds, imageSize: cropped.size)
-                vmLog.debug("FEN \(fen, privacy: .public)")
-
-                // quick validity check (board must contain both kings)
-                let check = FENValidator().isLikelyValid(fen)
-                guard check.ok else {
-                    vmLog.error("Invalid FEN: \(check.reason ?? "Unknown")")
-                    phase = .failed("""
-                    Board detection looks incomplete (\(check.reason ?? "invalid FEN")).
-                    Try a clearer photo with the full board visible.
-                    """)
-                    return
-                }
-
-                // 4) Engine
-                phase = .queryingEngine
-                let best = try await engine.bestMove(for: fen)
-                vmLog.info("Engine OK: UCI \(best.best_move_uci, privacy: .public) / SAN \(best.best_move_san, privacy: .public)")
-
-                // 5) Arrow
-                phase = .drawingArrow
-                let final = drawer.draw(on: cropped, uci: best.best_move_uci)
-
-                // Optional: save final image w/ arrow
-                // PhotoSaver.saveToLibrary(final)
-
-                // 6) Done
-                let overlays = drawDetections(on: cropped, predictions: preds) // optional overlay image
-                phase = .done(.init(cropped: cropped,
-                                    overlays: overlays,
-                                    fen: fen,
-                                    bestMove: best,
-                                    finalImage: final))
-                vmLog.info("Analysis done")
-            } catch {
-                let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                vmLog.error("Analysis failed: \(msg, privacy: .public)")
-                phase = .failed(msg)
+            case .failure(let failure):
+                vmLog.error("Analysis failed: \(failure.userMessage, privacy: .public)")
+                phase = .failed(failure.userMessage)
             }
         }
+    }
+
+    func runBenchmark(with image: UIImage, inputID: String) async -> BenchmarkRunResult {
+        vmLog.info("Benchmark analysis start: \(inputID, privacy: .public)")
+
+        switch await runPhotoPipeline(
+            with: image,
+            inputID: inputID,
+            updatesPhase: false
+        ) {
+        case .success(let success):
+            return BenchmarkRunResult(
+                inputID: inputID,
+                success: true,
+                detectionCount: success.predictions.count,
+                fenValid: true,
+                errorMessage: nil
+            )
+        case .failure(let failure):
+            return failure.benchmarkResult
+        }
+    }
+
+    private func runPhotoPipeline(
+        with image: UIImage,
+        inputID: String,
+        updatesPhase: Bool
+    ) async -> PhotoPipelineOutcome {
+        let benchmarkSession = benchmarkLogger?.startPhotoRun(inputID: inputID)
+
+        setPhase(.cropping, enabled: updatesPhase)
+        let boardStartedAt = ProcessInfo.processInfo.systemUptime
+        let cropped: UIImage
+        do {
+            cropped = try cropper.crop(image)
+            benchmarkSession?.markBoardCompleted(
+                ms: elapsedMilliseconds(since: boardStartedAt)
+            )
+        } catch {
+            let msg = localizedMessage(for: error)
+            return .failure(
+                finishFailure(
+                    inputID: inputID,
+                    userMessage: msg,
+                    errorMessage: "board_crop_failed: \(msg)",
+                    benchmarkSession: benchmarkSession
+                )
+            )
+        }
+
+        if saveDebugImages {
+            PhotoSaver.saveToLibrary(cropped)
+            vmLog.info("Saved cropped board to Photos.")
+        }
+
+        setPhase(.detecting, enabled: updatesPhase)
+        let pieceStartedAt = ProcessInfo.processInfo.systemUptime
+        let raw: [Prediction]
+        do {
+            raw = try await pieceDetector.detect(on: cropped)
+            benchmarkSession?.markPieceCompleted(
+                ms: elapsedMilliseconds(since: pieceStartedAt)
+            )
+        } catch {
+            let msg = localizedMessage(for: error)
+            return .failure(
+                finishFailure(
+                    inputID: inputID,
+                    userMessage: msg,
+                    errorMessage: "piece_detection_failed: \(msg)",
+                    benchmarkSession: benchmarkSession
+                )
+            )
+        }
+        vmLog.info("Raw detections: \(raw.count, privacy: .public)")
+
+        let filter = PieceFilter(
+            minConfidence: 0.30,
+            minConfidenceKing: 0.22,
+            edgeTrimSquares: 0.12,
+            minSizeFrac: 0.35,
+            maxSizeFrac: 1.60
+        )
+        let preds = filter.apply(raw, imageSize: cropped.size)
+        vmLog.info("Filtered detections: \(preds.count, privacy: .public)")
+
+        if saveDebugImages,
+           let rawPreview = drawDetectionPreview(on: cropped, predictions: raw) {
+            PhotoSaver.saveToLibrary(rawPreview)
+        }
+        if saveDebugImages,
+           let filteredPreview = drawDetectionPreview(on: cropped, predictions: preds) {
+            PhotoSaver.saveToLibrary(filteredPreview)
+        }
+
+        let grouped = Dictionary(grouping: preds, by: { $0.class })
+            .map { "\($0.key): \($0.value.count)" }
+            .sorted()
+        vmLog.info("Class breakdown (filtered) → \(grouped.joined(separator: ", "), privacy: .public)")
+
+        setPhase(.generatingFEN, enabled: updatesPhase)
+        let fen = fenBuilder.fen(from: preds, imageSize: cropped.size)
+        vmLog.debug("FEN \(fen, privacy: .public)")
+
+        let check = FENValidator().isLikelyValid(fen)
+        guard check.ok else {
+            let reason = check.reason ?? "invalid FEN"
+            vmLog.error("Invalid FEN: \(reason, privacy: .public)")
+            return .failure(
+                finishFailure(
+                    inputID: inputID,
+                    userMessage: """
+                    Board detection looks incomplete (\(reason)).
+                    Try a clearer photo with the full board visible.
+                    """,
+                    detectionCount: preds.count,
+                    fenValid: false,
+                    errorMessage: "invalid_fen: \(reason)",
+                    benchmarkSession: benchmarkSession
+                )
+            )
+        }
+
+        benchmarkSession?.finishSuccess(
+            detectionCount: preds.count,
+            fenValid: true
+        )
+
+        return .success(
+            PhotoPipelineSuccess(
+                cropped: cropped,
+                predictions: preds,
+                fen: fen
+            )
+        )
+    }
+
+    private func finishFailure(
+        inputID: String,
+        userMessage: String,
+        detectionCount: Int? = nil,
+        fenValid: Bool? = nil,
+        errorMessage: String,
+        benchmarkSession: BenchmarkSession?
+    ) -> PhotoPipelineFailure {
+        benchmarkSession?.finishFailure(
+            detectionCount: detectionCount,
+            fenValid: fenValid,
+            errorMessage: errorMessage
+        )
+        return PhotoPipelineFailure(
+            benchmarkResult: BenchmarkRunResult(
+                inputID: inputID,
+                success: false,
+                detectionCount: detectionCount,
+                fenValid: fenValid,
+                errorMessage: errorMessage
+            ),
+            userMessage: userMessage
+        )
+    }
+
+    private func setPhase(_ phase: Phase, enabled: Bool) {
+        guard enabled else { return }
+        self.phase = phase
+    }
+
+    private func elapsedMilliseconds(since start: TimeInterval) -> Double {
+        (ProcessInfo.processInfo.systemUptime - start) * 1000
+    }
+
+    private func localizedMessage(for error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     // MARK: - Helpers
