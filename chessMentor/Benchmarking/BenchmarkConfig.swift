@@ -30,6 +30,7 @@ struct BenchmarkConfig {
     }
 
     static func loggingEnabled(processInfo: ProcessInfo = .processInfo) -> Bool {
+        // CSV logging stays opt-in so normal app runs do not emit benchmark records.
         processInfo.arguments.contains("ENABLE_BENCHMARK_LOGGING")
             || processInfo.environment["ENABLE_BENCHMARK_LOGGING"] == "1"
     }
