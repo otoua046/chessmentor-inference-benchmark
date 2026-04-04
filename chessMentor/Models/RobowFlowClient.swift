@@ -153,3 +153,5 @@ class RoboflowClient {
         }
     }
 }
+
+extension RoboflowClient: PieceDetectionServing, BoardDetectionServing {}

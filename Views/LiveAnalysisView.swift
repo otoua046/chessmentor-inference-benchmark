@@ -1,11 +1,19 @@
 import SwiftUI
 
 struct LiveAnalysisView: View {
-    @StateObject private var camera = LiveCaptureService()
-    @StateObject private var vm = LiveAnalysisViewModel(
-        detector: BoardDetectorAdapter(roboflowApiKey: "SxJbV6TVzYIVMe0brpAk"),
-        engine: StockfishBestMoveProvider()
-    )
+    @StateObject private var camera: LiveCaptureService
+    @StateObject private var vm: LiveAnalysisViewModel
+
+    @MainActor
+    init(inferenceFactory: InferenceFactory) {
+        _camera = StateObject(wrappedValue: LiveCaptureService())
+        _vm = StateObject(
+            wrappedValue: LiveAnalysisViewModel(
+                detector: inferenceFactory.makeBoardDetectorAdapter(),
+                engine: StockfishBestMoveProvider()
+            )
+        )
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {

@@ -7,5 +7,7 @@
 		<string>SFPRODISPLAYBOLD.OTF</string>
 		<string>SFPRODISPLAYREGULAR.OTF</string>
 	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 </dict>
 </plist>

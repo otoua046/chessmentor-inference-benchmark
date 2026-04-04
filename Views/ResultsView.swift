@@ -2,7 +2,13 @@ import SwiftUI
 
 struct ResultsView: View {
     @ObservedObject var camera: CameraModel
-    @StateObject private var vm = ResultsViewModel(roboflowApiKey: "SxJbV6TVzYIVMe0brpAk")
+    @StateObject private var vm: ResultsViewModel
+
+    @MainActor
+    init(camera: CameraModel, inferenceFactory: InferenceFactory) {
+        self.camera = camera
+        _vm = StateObject(wrappedValue: inferenceFactory.makeResultsViewModel())
+    }
 
     var body: some View {
         VStack {
@@ -56,6 +62,8 @@ struct ResultsView: View {
 }
 
 #Preview {
-    ResultsView(camera: CameraModel.mock())
+    ResultsView(
+        camera: CameraModel.mock(),
+        inferenceFactory: InferenceFactory(mode: .hosted, roboflowApiKey: "PREVIEW")
+    )
 }
-
